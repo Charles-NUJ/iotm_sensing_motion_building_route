@@ -1,40 +1,63 @@
-# Sensing Motion, Building Routes: ns-3 simulation core
+# Sensing Motion, Building Routes
 
-This repository contains the compact, native ns-3 experiment core for the article *Sensing Motion, Building Routes: Design Lessons for Embodied Low-Altitude IoT*. It includes the source-route protocol and task simulation, frozen predictor parameters, and one small scenario with its recorded result. It does **not** contain the ns-3 distribution, the paper, reviewer correspondence, private infrastructure details, or all raw experiment outputs.
+This repository contains the ns-3 simulation core for *Sensing Motion, Building Routes: Design Lessons for Embodied Low-Altitude IoT*. It studies how mobile agents use local motion information to establish multihop routes and deliver task data.
 
-## What is modeled
+## Overview
 
-- `src/p2_native_density.cc` implements HELLO exchange, improving-label route discovery and merging, reply and error handling, link scores, source-routed task packets, and a fixed follower controller. It calls ns-3.32 for ad hoc 802.11a PHY, propagation, DCF MAC, IP, ARP, and acknowledgments.
-- `inputs/` contains the fixed Ridge, Motion MLP, and Context MLP weights and one synthetic formation mission (`formation_n24_s4501.dat`).
-- `scripts/generate_missions.py` regenerates the synthetic mission inputs used by the density experiment. The included fixture permits a numerical generator check with an absolute tolerance of `1e-10`.
-- `examples/formation_n24_s4501_motion.reference.json` is the archived aggregate result for the included input and Motion MLP. It is a reference for one run, not an independent measurement.
+Agents exchange local motion information. In the learning-based variants, a fixed predictor estimates a one-hop link-holding score. A distributed route builder uses link scores to discover a path and merges repeated route-request updates. Delivered packets update the state estimate used by a fixed follower controller. The resulting motion changes the network geometry.
 
-The shared-channel density experiment used three synthetic mission families, 18/24/30 nodes, seeds 4501–4512, and five metrics: hop count, analytical link expiration, Ridge, Motion MLP, and Context MLP. The resulting 540 configurations share the same protocol interface and frozen parameters. The route builder is an AODV-style source-route overlay, **not** a complete RFC 3561 implementation. The channel is a packet-level simulation; it is not a measured UAV channel, waveform-level study, onboard benchmark, or flight experiment. Model weights do not learn online. Results do not establish a general neural advantage.
+The implementation uses the ns-3.32 802.11a PHY, propagation, DCF MAC, and IP stack. It is an AODV-style source-route overlay, not a complete RFC 3561 implementation.
+
+## Repository contents
+
+| Path | Contents |
+| --- | --- |
+| `src/p2_native_density.cc` | Routing, link scoring, task control, and ns-3 simulation |
+| `inputs/` | Frozen predictor parameters and one example mission |
+| `scripts/` | Build, example, result-checking, and mission-generation scripts |
+| `examples/` | Archived result for the included example |
+| `tests/` | Mission-generator test |
+
+The repository does not include the ns-3 distribution or the complete experiment results.
 
 ## Requirements
 
-- Linux, a C++17 compiler, and a separately installed and built **ns-3.32**. The original validation used the debug build and g++ 14.2.0. The bundled script links against the debug libraries; use `NS3_BUILD_PROFILE=optimized` only when matching ns-3.32 optimized libraries are present.
-- Python 3 and NumPy for mission generation and its test. NumPy is not needed to run the C++ simulator with the included input.
+- Linux and a C++17 compiler.
+- A separately built [ns-3.32](https://www.nsnam.org/releases/ns-3-32/) debug build, with headers in `build/ns3` and libraries in `build/lib`.
+- Python 3 and NumPy for generating missions and running the test. NumPy is not required to run the included C++ example.
 
-Build ns-3.32 using its own documentation first. Then, from this repository:
+## Run the example
+
+After building ns-3.32, clone this repository and run:
 
 ```bash
+git clone https://github.com/Charles-NUJ/iotm_sensing_motion_building_route.git
+cd iotm_sensing_motion_building_route
+
 bash scripts/build.sh /absolute/path/to/ns-3.32
 bash scripts/run_example.sh
 python3 scripts/check_example.py outputs/formation_n24_s4501_motion.json
+```
+
+The example uses a 24-node formation mission, seed 4501, and the Motion MLP score. Its result is saved in `outputs/`. The final command compares it with the archived result in `examples/` and prints `REFERENCE_MATCH` when the checked values agree. Results may differ across build environments.
+
+To check the mission generator:
+
+```bash
 python3 -m unittest discover -s tests -v
 ```
 
-The first command uses ns-3.32's generated headers under `build/ns3` and its shared libraries under `build/lib`. It does not copy files into or overwrite the ns-3 source tree. The example creates ignored files under `outputs/`. The comparison script reports the difference from the archived result; matching it is an empirical check, not guaranteed for different builds or platforms.
+## Generate other missions
 
-To generate the complete fixed mission grid in a new directory:
+The generator supports waypoint, Gauss-Markov, and formation missions with 18, 24, or 30 nodes. The following command generates the 108 mission inputs used in the density experiment:
 
 ```bash
 python3 scripts/generate_missions.py --all --output-dir generated_inputs
+cp inputs/ridge.dat inputs/motion_s*.dat inputs/context_s*.dat generated_inputs/
 ```
 
-Copy the seven frozen model `.dat` files from `inputs/` into that directory before running the simulator with `--input=generated_inputs`. The generator refuses to overwrite existing mission files. In a local NumPy 2.3.5 check against the 108 archived missions, the largest absolute numeric difference was below `4e-13`; small floating-point differences can still affect a discrete-event replay. To run a case directly, use the parameters shown in `scripts/run_example.sh`; `--method` accepts `hop`, `analytical`, `ridge`, `motion`, and `context`. Set `--mission`, `--nodes`, and `--seed` to the generated file's values. This repository supplies the experiment core, a generator, and a reference case; it does not supply the complete 540-run result archive or the analysis pipeline.
+The generator does not overwrite existing mission files. It may produce small floating-point differences across environments. The simulator accepts `hop`, `analytical`, `ridge`, `motion`, and `context` as routing metrics; see `scripts/run_example.sh` for the command format. The full result archive and analysis pipeline are not included here.
 
-## Code and licensing
+## Scope and license
 
-The experiment source retains its original `GPL-2.0-or-later` notice; the version 2 license text is supplied in `LICENSE-GPL-2.0.txt`. ns-3 is a separately obtained dependency with its own licensing terms. This repository does not grant additional permissions for the article or third-party materials. The small generated input and numeric parameter files are provided only as part of this simulation artifact; no additional license is specified for them here.
+These are packet-level simulations, not UAV flight tests or measurements from a calibrated wireless channel. The simulation source `src/p2_native_density.cc` retains its `GPL-2.0-or-later` notice; the version 2 license text is in `LICENSE-GPL-2.0.txt`. ns-3 is a separate dependency. No additional license is specified here for the other project files.
