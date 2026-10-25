@@ -1,0 +1,7 @@
+# Preserve the archived simulator and numeric inputs byte for byte.
+src/*.cc -text
+inputs/*.dat -text
+examples/*.json -text
+*.sh text eol=lf
+*.py text eol=lf
+*.md text eol=lf
