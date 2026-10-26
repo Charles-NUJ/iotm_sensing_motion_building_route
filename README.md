@@ -1,73 +1,115 @@
 # Sensing Motion, Building Routes
 
-This repository contains the ns-3 simulation core and Python model-training workflow for *Sensing Motion, Building Routes: Design Lessons for Embodied Low-Altitude IoT*. It studies how mobile agents use local motion information to establish multihop routes and deliver task data.
+This repository provides the ns-3 and Python code for *Sensing Motion,
+Building Routes: Design Lessons for Embodied Low-Altitude IoT*. Mobile agents
+use local motion states to score one-hop link persistence. An explicit
+distributed route process then builds multihop paths and uses packet feedback
+to refresh the state applied by the follower controller.
 
-## Overview
+The current workflow covers five routing metrics:
 
-Agents exchange local motion information. In the learning-based variants, a fixed predictor estimates a one-hop link-holding score. A distributed route builder uses link scores to discover a path and merges repeated route-request updates. Delivered packets update the state estimate used by a fixed follower controller. The resulting motion changes the network geometry.
+- **Frozen:** one common 241-parameter persistence prior.
+- **Scene FT:** one fine-tuned model for each motion family.
+- **Speed FT:** one fine-tuned model for each measured relative-speed band.
+- **Scene-speed FT:** one fine-tuned model for each family and speed band.
+- **LET:** the analytical constant-velocity link-expiration metric.
 
-The implementation uses the ns-3.32 802.11a PHY, propagation, DCF MAC, and IP stack. It is an AODV-style source-route overlay, not a complete RFC 3561 implementation.
+Hop count is the paired reference. The final analysis retains complete paired
+tasks whose delivered Hop route contains at least four hops.
 
-## Repository contents
+## Code map
 
-| Path | Contents |
+| Path | Purpose |
 | --- | --- |
-| `src/p2_native_density.cc` | Density-study routing, link scoring, task control, and ns-3 simulation |
-| `src/p2_native_kf15.cc` | Final 15-seed study core with timestamp-aware state estimation |
-| `inputs/` | Frozen predictor parameters and example missions for both cores |
-| `scripts/` | Build, example, result-checking, and mission-generation scripts |
-| `examples/` | Archived result for the included example |
-| `tests/` | Mission-generator test |
-| `python_training/` | Compact/Rich MLP and Ridge training, TFLite export, and tests |
+| src/p2_native_absolute_speed.cc | Main ns-3.32 PHY/MAC, mobility, routing, estimation, and following experiment |
+| factorial_experiment/generate_data.py | Generate native mobility traces for disjoint training, validation, and evaluation seeds |
+| factorial_experiment/train_models.py | Build link-holding examples and train scene, speed, and joint models |
+| factorial_experiment/run_experiment.py | Run paired Hop, LET, Frozen, Scene FT, Speed FT, and Scene-speed FT trials |
+| factorial_experiment/analyze_and_plot.py | Apply the multihop pairing rule, summarize results, and draw the two-panel violin figure |
+| factorial_experiment/config.json | Motion families, speed ranges, seeds, model settings, and pairing rules |
+| tests/ | Mission generation, split, task-matrix, speed-band, and endpoint-symmetry checks |
+| python_training/ | Offline-prior workflow using public flight tracks |
+| src/p2_native_density.cc | Node-density extension |
+| src/p2_native_kf15.cc | Timestamp-aware estimation study |
 
-The repository does not include the ns-3 distribution or the complete experiment results.
+The main C++ source uses the [ns-3](https://www.nsnam.org/) 802.11a PHY,
+propagation model, ad hoc DCF MAC, ACK/retry behavior, and IP stack. It also
+uses the native Random Waypoint and Gauss-Markov mobility models. Formation
+motion uses constant-velocity agents with packet-driven follower updates.
 
 ## Requirements
 
-- Linux and a C++17 compiler.
-- A separately built [ns-3.32](https://www.nsnam.org/releases/ns-3-32/) debug build, with headers in `build/ns3` and libraries in `build/lib`.
-- Python 3 and NumPy for generating missions and running the test. NumPy is not required to run the included C++ example.
+- Linux with a C++17 compiler
+- A built ns-3.32 tree
+- Python 3
+- NumPy for code checks and trace processing
+- PyTorch for fine-tuning
+- Matplotlib for the result figure
 
-## Run the example
+Install the Python packages for the final workflow:
 
-After building ns-3.32, clone this repository and run:
+~~~bash
+python3 -m venv .venv
+source .venv/bin/activate
+python3 -m pip install -r factorial_experiment/requirements.txt
+~~~
 
-```bash
-git clone https://github.com/Charles-NUJ/iotm_sensing_motion_building_route.git
-cd iotm_sensing_motion_building_route
+## Build the ns-3 programs
 
+~~~bash
 bash scripts/build.sh /absolute/path/to/ns-3.32
-bash scripts/run_example.sh
-python3 scripts/check_example.py outputs/formation_n24_s4501_motion.json
-bash scripts/run_kf15_example.sh
-```
+~~~
 
-The first example uses a 24-node formation mission, seed 4501, and the Motion MLP score. Its result is saved in `outputs/`. The check compares it with the archived result in `examples/` and prints `REFERENCE_MATCH` when the checked values agree. The second example uses the final timestamp-aware state estimator with seed 4601. Results may differ across build environments.
+This creates build/p2_native_absolute_speed, build/p2_native_density, and
+build/p2_native_kf15.
 
-To check the mission generator:
+## Check the code
 
-```bash
+The checks below use only the small deterministic fixtures included in the
+repository.
+
+~~~bash
 python3 -m unittest discover -s tests -v
-```
+python3 -m unittest discover -s python_training/tests -v
+python3 -m factorial_experiment.generate_data --dry-run --limit 2
+python3 -m factorial_experiment.train_models --dry-run
+~~~
 
-## Generate other missions
+## Run the final workflow
 
-The generator supports waypoint, Gauss-Markov, and formation missions with 18, 24, or 30 nodes. The following command generates the mission inputs used in the density experiment:
+The complete sequence is:
 
-```bash
-python3 scripts/generate_missions.py --all --output-dir generated_inputs
-cp inputs/ridge.dat inputs/motion_s*.dat inputs/context_s*.dat generated_inputs/
-```
+~~~bash
+python3 -m factorial_experiment.generate_data --split all
+python3 -m factorial_experiment.train_models
+python3 -m factorial_experiment.run_experiment
+python3 -m factorial_experiment.analyze_and_plot
+~~~
 
-The generator does not overwrite existing mission files. It may produce small floating-point differences across environments. The density core accepts `hop`, `analytical`, `ridge`, `motion`, and `context`. The final core also accepts `base_motion` and uses `motion` and `context` for the corresponding fine-tuned priors. The repository retains the source, model workflow, frozen score parameters, and executable examples; the large raw result archive is stored separately.
+The same sequence is available through factorial_experiment/run_all.sh.
 
-## Train the link-holding models
+The default design uses 20 whole-mission seeds for training, five for model
+selection, and ten for final evaluation. The seed groups are disjoint. The
+absolute-speed axis is 0--5 m/s. Link examples are assigned by measured
+endpoint relative speed to 2--4, 5--7, or 8--10 m/s training bands. The figure
+combines the first two bands as the lower-speed display group and keeps the
+8--10 m/s group as the high-speed display group.
 
-The training workflow is independent of the ns-3 build. It downloads no data
-automatically. Follow `python_training/README.md` to use the public Flight
-Routes dataset, train the two endpoint-symmetric MLPs and Ridge baseline, and
-export the neural models to TFLite.
+All generated traces, model files, logs, summaries, and figures are written
+under factorial_experiment/artifacts/. That directory is ignored by Git. The
+repository therefore contains generation and analysis code rather than a copy
+of the experiment data. Frozen model parameters and small deterministic
+fixtures remain tracked because the checks and examples use them.
 
-## Scope and license
+## Offline prior
 
-The system experiments use native ns-3.32 802.11a PHY/MAC discrete-event simulation. The simulation sources in `src/` retain their `GPL-2.0-or-later` notices; the version 2 license text is in `LICENSE-GPL-2.0.txt`. ns-3 is a separate dependency. No additional license is specified here for the other project files.
+The separate python_training/ workflow forms the initial endpoint-symmetric
+prior from public flight tracks. It reads an external checkout and writes
+models and results into ignored directories. See python_training/README.md for
+its commands.
+
+## License
+
+The ns-3-linked simulation sources retain their GPL-2.0-or-later notices. The
+version 2 license text is provided in LICENSE-GPL-2.0.txt. ns-3 is a separate
+dependency.

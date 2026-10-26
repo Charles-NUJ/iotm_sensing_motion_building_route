@@ -1,5 +1,11 @@
 /build/
 /outputs/
 /generated_inputs/
+/artifacts/
+/factorial_experiment/artifacts/
+/python_training/data/
+/python_training/models/
+/python_training/results/
+.venv/
 __pycache__/
 *.pyc

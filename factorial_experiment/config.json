@@ -1,0 +1,49 @@
+{
+  "engine": "ns-3.32",
+  "binary": "build/p2_native_absolute_speed",
+  "families": ["waypoint", "gauss_markov", "formation"],
+  "absolute_speed_m_s": [0, 1, 2, 3, 4, 5],
+  "nodes": 24,
+  "duration_s": 40,
+  "mobility_sample_period_s": 0.1,
+  "communication_range_m": 200,
+  "link_hold_horizon_s": 5,
+  "formation": {
+    "relative_speed_target_m_s": {
+      "low": 4,
+      "medium": 7,
+      "high": 10
+    },
+    "zero_speed_target_m_s": 0,
+    "excitation_period_s": 40,
+    "excitation_sharpness": 1
+  },
+  "relative_speed_bands": [
+    {"key": "low", "lower_m_s": 2, "upper_m_s": 4},
+    {"key": "medium", "lower_m_s": 5, "upper_m_s": 7},
+    {"key": "high", "lower_m_s": 8, "upper_m_s": 10}
+  ],
+  "seeds": {
+    "training": [6101, 6102, 6103, 6104, 6105, 6106, 6107, 6108, 6109, 6110, 6111, 6112, 6113, 6114, 6115, 6116, 6117, 6118, 6119, 6120],
+    "validation": [6201, 6202, 6203, 6204, 6205],
+    "evaluation": [6301, 6302, 6303, 6304, 6305, 6306, 6307, 6308, 6309, 6310]
+  },
+  "training": {
+    "base_model": "inputs/base_motion.dat",
+    "sample_period_s": 1,
+    "maximum_samples_per_family_band_seed": 1000,
+    "sampling_seed": 20261026,
+    "batch_size": 1024,
+    "learning_rate": 0.001,
+    "maximum_epochs": 60,
+    "early_stopping_patience": 8
+  },
+  "evaluation": {
+    "methods": ["hop", "let", "frozen", "scene_ft", "speed_ft", "joint_ft"],
+    "minimum_hop_count": 4,
+    "display_groups": {
+      "lower": ["low", "medium"],
+      "high": ["high"]
+    }
+  }
+}

@@ -13,7 +13,7 @@ libs=()
 for module in "${modules[@]}"; do
   libs+=("-lns3.32-$module-$profile")
 done
-for source in p2_native_density p2_native_kf15; do
+for source in p2_native_density p2_native_kf15 p2_native_absolute_speed; do
   g++ -std=c++17 -O2 -I"$ns3_dir/build" "$repo_dir/src/${source}.cc" \
     -L"$ns3_dir/build/lib" -Wl,--no-as-needed "${libs[@]}" \
     -Wl,-rpath,"$ns3_dir/build/lib" -o "$repo_dir/build/${source}"

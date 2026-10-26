@@ -3,8 +3,13 @@
 from __future__ import annotations
 
 import unittest
+import sys
+from pathlib import Path
 
 import numpy as np
+
+PYTHON_TRAINING = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(PYTHON_TRAINING))
 
 from src.link_hold_model import (
     LINK_HOLD_TARGET_HORIZON_S,
